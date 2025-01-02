@@ -1,8 +1,10 @@
+# Limage: Limine Boot Imager
+
 Limage is a command line tool designed to assist in building a Rust-based kernel with the Limine bootloader. This tool automates the process of downloading necessary files, copying them to the appropriate directories, building the kernel, and creating an ISO image for booting.
 
 Importantly, allows support for `cargo run` and `cargo test` to execute through QEMU.
 
-Inspired, and partially derived from, the popular `bootimage` crate.
+Inspired by, and partially derived from, the popular [bootimage](https://crates.io/crates/bootimage) crate.
 
 ## Basic Usage
 
@@ -11,6 +13,8 @@ Inspired, and partially derived from, the popular `bootimage` crate.
 **Build:** `cargo limage`
 
 **Run (QEMU):** `cargo run`
+
+**Test (QEMU):** `cargo test`
 
 **Delete Image:** `cargo clean`
 
@@ -79,9 +83,7 @@ test-success-exit-code = 33 # (0x10 << 1) | 1
 test-args = ["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio", "-display", "none"]
 ```
 
-Also for testing, your kernel should be configured to use the `custom_test_frameworks` feature. For the best experience, your main.rs and lib.rs should both be configured to use this feature.
-
-In an effort to keep this README succinct, please refer to the lib.rs and main.rs of the example kernel.
+Also for testing, your kernel should be configured to use the `custom_test_frameworks` feature. For the best experience, your main.rs and lib.rs should both be configured to use this feature. In an effort to keep this README succinct, please refer to the [lib.rs](https://github.com/phillipg14/limage/blob/main/example/src/lib.rs) and [main.rs](https://github.com/phillipg14/limage/blob/main/example/src/main.rs) of the example kernel.
 
 ### Build
 
