@@ -10,7 +10,7 @@ Inspired by, and partially derived from, the popular [bootimage](https://crates.
 
 **Installation:** `cargo install limage`
 
-**Build:** `cargo limage`
+**Build:** `limage`
 
 **Run (QEMU):** `cargo run`
 
