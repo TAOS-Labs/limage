@@ -92,7 +92,7 @@ Also for testing, your kernel should be configured to use the `custom_test_frame
 Run the command line tool with the following command:
 
 ```
-cargo limage
+limage
 ```
 
 This will initiate the kernel building process. You may need to provide additional command-line arguments depending on your specific requirements.
