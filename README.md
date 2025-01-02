@@ -18,6 +18,8 @@ Inspired by, and partially derived from, the popular [bootimage](https://crates.
 
 **Delete Image:** `cargo clean`
 
+NOTE: `run` and `test` commands will always build before their execution.
+
 ## Prerequisites
 - **Linux:** Required for building the Limine bootloader. WSL for Windows is compatible (tested with MSYS2).
 - **Xorriso:** Required for building the *.iso file.
