@@ -1,5 +1,5 @@
 use crate::config::Config;
-use std::{path::{Path, PathBuf}, process::Stdio};
+use std::{path::{Path, PathBuf}, process::{ExitStatus, Stdio}};
 use cargo_metadata::Metadata;
 use thiserror::Error;
 
@@ -52,6 +52,10 @@ impl Builder {
         self.prepare_limine_files()?;
         self.copy_kernel(&bin_path)?;
         self.create_limine_iso(&config)?;
+
+        if config.filesystem.is_some() {
+            self.build_filesystem(&config)?;
+        }
 
         Ok(0)
     }
@@ -193,6 +197,52 @@ impl Builder {
             .map_err(|_| BuildError::InstallLimineToIsoFailed)?;
         Ok(())
     }
+
+    fn build_filesystem(&self, config: &Config) -> Result<(), BuildError> {
+        // println!("BUILD STEP 5/5: Building the filesystem image");
+
+        if config.filesystem_builder.is_some() {
+            println!("Running filesystem builder: {}", config.filesystem_builder.as_ref().unwrap());
+            let builder = config.filesystem_builder.as_ref().unwrap();
+            let mut command = std::process::Command::new(builder);
+            command.stdout(Stdio::piped());
+            command.output().map_err(|_| BuildError::CreateDirectoryFailed)?;
+        }
+
+        std::process::Command::new("dd")
+            .arg("if=/dev/zero")
+            .arg(format!("of={}", config.filesystem_image.clone()))
+            .arg("bs=1M")
+            .arg("count=64")
+            .stdout(Stdio::piped())
+            .output()
+            .map_err(|_| BuildError::CreateEmptyImgFailed)?;
+
+        std::process::Command::new("mkfs.fat")
+            .arg("-F 32")
+            .arg(config.filesystem_image.clone())
+            .stdout(Stdio::piped())
+            .status()
+            .map_err(|_| BuildError::FormatImgFailed)
+            .unwrap_or(ExitStatus::default());
+
+        std::process::Command::new("mmd")
+            .arg("-i").arg(config.filesystem_image.clone())
+            .arg(format!("::{}", config.filesystem_target_dir.clone()))
+            .stdout(Stdio::piped())
+            .output()
+            .map_err(|_| BuildError::AddImgDirectoryFailed)?;
+
+        std::process::Command::new("mcopy")
+            .arg("-i").arg(config.filesystem_image.clone())
+            .arg(config.filesystem_source_dir.clone())
+            .arg(format!("::{}/", config.filesystem_target_dir.clone()))
+            .stdout(Stdio::piped())
+            .output()
+            .map_err(|_| BuildError::AddImgContentFailed)?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Error)]
@@ -220,6 +270,18 @@ pub enum BuildError {
 
     #[error("Failed to copy kernel binary")]
     CopyKernelBinaryFailed,
+
+    #[error("Failed to create empty image")]
+    CreateEmptyImgFailed,
+
+    #[error("Failed to format filesystem image")]
+    FormatImgFailed,
+
+    #[error("Failed to add directory to filesystem image")]
+    AddImgDirectoryFailed,
+
+    #[error("Failed to add content to filesystem image")]
+    AddImgContentFailed,
 
     #[error("Failed to create directory")]
     CreateDirectoryFailed,

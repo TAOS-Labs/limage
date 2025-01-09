@@ -1,6 +1,6 @@
 [package]
 name = "limage"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 authors = ["Phillip Groves <phillip.t.groves@gmail.com>"]
 description = "A Cargo utility for running/testing Rust-based kernels using the Limine bootloader"

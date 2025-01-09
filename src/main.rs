@@ -52,7 +52,7 @@ fn validate_arguments() -> Result<()> {
             return Ok(());
         },
         Some("--version") | Some("-v") => {
-            println!("limage v0.5.0");
+            println!("limage v0.5.1");
             return Ok(());
         },
         Some(arg) => return Err(anyhow!(

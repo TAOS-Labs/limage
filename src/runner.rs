@@ -13,6 +13,11 @@ pub fn run(config: Config, is_test: bool) -> Result<i32, RunError> {
         .map(|arg| arg.replace("{}", &format!("{}", config.image_path.display().to_string())))
         .collect();
 
+    if config.filesystem.is_some() {
+        run_command.push("-drive".to_owned());
+        run_command.push(format!("file={},format=raw", config.filesystem_target_dir.clone()));
+    }
+
     if is_test {
         if config.test_no_reboot {
             run_command.push("-no-reboot".to_owned());
