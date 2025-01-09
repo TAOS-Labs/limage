@@ -218,8 +218,28 @@ impl Builder {
             .output()
             .map_err(|_| BuildError::CreateEmptyImgFailed)?;
 
+        let filesystem = config.filesystem.clone().unwrap().to_uppercase();
+        if filesystem.starts_with("FAT") {
+            self.build_filesystem_fat(&config)?;
+        } else if filesystem == "EXT4" {
+            self.build_filesystem_ext4(&config)?;
+        } else {
+            return Err(BuildError::FormatImgFailed);
+        }
+        
+        Ok(())
+    }
+
+    fn build_filesystem_fat(&self, config: &Config) -> Result<(), BuildError> {
+        let fat_type = match config.filesystem.clone().unwrap().to_uppercase().as_str() {
+            "FAT12" => "-F 12",
+            "FAT16" => "-F 16",
+            "FAT32" => "-F 32",
+            _ => "-F 32"
+        };
+
         std::process::Command::new("mkfs.fat")
-            .arg("-F 32")
+            .arg(fat_type)
             .arg(config.filesystem_image.clone())
             .stdout(Stdio::piped())
             .status()
@@ -241,6 +261,42 @@ impl Builder {
             .output()
             .map_err(|_| BuildError::AddImgContentFailed)?;
 
+        Ok(())
+    }
+
+    fn build_filesystem_ext4(&self, config: &Config) -> Result<(), BuildError> {
+        std::process::Command::new("mkfs.ext4")
+            .arg(config.filesystem_image.clone())
+            .stdout(Stdio::piped())
+            .status()
+            .map_err(|_| BuildError::FormatImgFailed)
+            .unwrap_or(ExitStatus::default());
+
+        std::process::Command::new("mount")
+            .arg("-o").arg("loop")
+            .arg(config.filesystem_image.clone())
+            .arg("/mnt")
+            .stdout(Stdio::piped())
+            .status()
+            .map_err(|_| BuildError::FormatImgFailed)
+            .unwrap_or(ExitStatus::default());
+
+        std::process::Command::new("cp")
+            .arg("-r")
+            .arg(format!("{}/", config.filesystem_source_dir.clone()))
+            .arg("/mnt/")
+            .stdout(Stdio::piped())
+            .status()
+            .map_err(|_| BuildError::AddImgContentFailed)
+            .unwrap_or(ExitStatus::default());
+
+        std::process::Command::new("umount")
+            .arg("/mnt")
+            .stdout(Stdio::piped())
+            .status()
+            .map_err(|_| BuildError::FormatImgFailed)
+            .unwrap_or(ExitStatus::default());
+        
         Ok(())
     }
 }
