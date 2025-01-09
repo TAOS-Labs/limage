@@ -213,7 +213,7 @@ impl Builder {
             .arg("if=/dev/zero")
             .arg(format!("of={}", config.filesystem_image.clone()))
             .arg("bs=1M")
-            .arg("count=64")
+            .arg(format!("count={}", config.filesystem_size.clone()))
             .stdout(Stdio::piped())
             .output()
             .map_err(|_| BuildError::CreateEmptyImgFailed)?;
@@ -241,7 +241,6 @@ impl Builder {
         std::process::Command::new("mkfs.fat")
             .arg(fat_type)
             .arg(config.filesystem_image.clone())
-            .stdout(Stdio::piped())
             .status()
             .map_err(|_| BuildError::FormatImgFailed)
             .unwrap_or(ExitStatus::default());
@@ -249,16 +248,14 @@ impl Builder {
         std::process::Command::new("mmd")
             .arg("-i").arg(config.filesystem_image.clone())
             .arg(format!("::{}", config.filesystem_target_dir.clone()))
-            .stdout(Stdio::piped())
-            .output()
+            .status()
             .map_err(|_| BuildError::AddImgDirectoryFailed)?;
 
         std::process::Command::new("mcopy")
             .arg("-i").arg(config.filesystem_image.clone())
-            .arg(config.filesystem_source_dir.clone())
+            .arg(format!("{}/*", config.filesystem_source_dir.clone()))
             .arg(format!("::{}/", config.filesystem_target_dir.clone()))
-            .stdout(Stdio::piped())
-            .output()
+            .status()
             .map_err(|_| BuildError::AddImgContentFailed)?;
 
         Ok(())
@@ -267,7 +264,6 @@ impl Builder {
     fn build_filesystem_ext4(&self, config: &Config) -> Result<(), BuildError> {
         std::process::Command::new("mkfs.ext4")
             .arg(config.filesystem_image.clone())
-            .stdout(Stdio::piped())
             .status()
             .map_err(|_| BuildError::FormatImgFailed)
             .unwrap_or(ExitStatus::default());
@@ -276,7 +272,6 @@ impl Builder {
             .arg("-o").arg("loop")
             .arg(config.filesystem_image.clone())
             .arg("/mnt")
-            .stdout(Stdio::piped())
             .status()
             .map_err(|_| BuildError::FormatImgFailed)
             .unwrap_or(ExitStatus::default());
@@ -285,14 +280,12 @@ impl Builder {
             .arg("-r")
             .arg(format!("{}/", config.filesystem_source_dir.clone()))
             .arg("/mnt/")
-            .stdout(Stdio::piped())
             .status()
             .map_err(|_| BuildError::AddImgContentFailed)
             .unwrap_or(ExitStatus::default());
 
         std::process::Command::new("umount")
             .arg("/mnt")
-            .stdout(Stdio::piped())
             .status()
             .map_err(|_| BuildError::FormatImgFailed)
             .unwrap_or(ExitStatus::default());

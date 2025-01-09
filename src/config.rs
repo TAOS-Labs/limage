@@ -16,6 +16,7 @@ pub struct Config {
     pub test_no_reboot: bool,
     pub filesystem: Option<String>,
     pub filesystem_builder: Option<String>,
+    pub filesystem_size: u64,
     pub filesystem_image: String,
     pub filesystem_source_dir: String,
     pub filesystem_target_dir: String,
@@ -89,6 +90,21 @@ fn read_config_inner(manifest_path: &Path) -> Result<Config> {
             ("filesystem-builder", Value::String(filesystem_builder)) => {
                 config.filesystem_builder = Some(filesystem_builder);
             }
+            ("filesystem-size", Value::Integer(size)) if size.is_negative() => {
+                return Err(anyhow!("filesystem-size must not be negative"))
+            }
+            ("filesystem-size", Value::Integer(size)) => {
+                config.filesystem_size = Some(size as u64);
+            }
+            ("filesystem-image", Value::String(filesystem_image)) => {
+                config.filesystem_image = Some(filesystem_image);
+            }
+            ("filesystem-source-dir", Value::String(filesystem_source_dir)) => {
+                config.filesystem_source_dir = Some(filesystem_source_dir);
+            }
+            ("filesystem-target-dir", Value::String(filesystem_target_dir)) => {
+                config.filesystem_target_dir = Some(filesystem_target_dir);
+            }
             (key, value) => {
                 return Err(anyhow!(
                     "unexpected `package.metadata.limage` \
@@ -125,6 +141,7 @@ struct ConfigBuilder {
     test_no_reboot: Option<bool>,
     filesystem: Option<String>,
     filesystem_builder: Option<String>,
+    filesystem_size: Option<u64>,
     filesystem_image: Option<String>,
     filesystem_source_dir: Option<String>,
     filesystem_target_dir: Option<String>,
@@ -152,8 +169,9 @@ impl Into<Config> for ConfigBuilder {
             test_no_reboot: self.test_no_reboot.unwrap_or(true),
             filesystem: self.filesystem,
             filesystem_builder: self.filesystem_builder,
+            filesystem_size: self.filesystem_size.unwrap_or(32),
             filesystem_image: self.filesystem_image.unwrap_or("target/fs.img".into()),
-            filesystem_source_dir: self.filesystem_source_dir.unwrap_or("tests/storage/*".into()),
+            filesystem_source_dir: self.filesystem_source_dir.unwrap_or("tests/storage".into()),
             filesystem_target_dir: self.filesystem_target_dir.unwrap_or("/test".into()),
         }
     }
