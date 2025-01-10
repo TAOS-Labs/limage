@@ -15,7 +15,7 @@ pub fn run(config: Config, is_test: bool) -> Result<i32, RunError> {
 
     if config.filesystem.is_some() {
         run_command.push("-drive".to_owned());
-        run_command.push(format!("file={},format=raw", config.filesystem_image.clone()));
+        run_command.push(format!("file={},format=raw", config.filesystem.unwrap().clone()));
     }
 
     if is_test {

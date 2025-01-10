@@ -1,5 +1,5 @@
 use crate::config::Config;
-use std::{path::{Path, PathBuf}, process::{ExitStatus, Stdio}};
+use std::{path::{Path, PathBuf}, process::Stdio};
 use cargo_metadata::Metadata;
 use thiserror::Error;
 
@@ -48,21 +48,26 @@ impl Builder {
     }
     
     pub fn build(&mut self, config: &Config, bin_path: &Option<PathBuf>) -> Result<i32, BuildError> {
+        self.execute_prebuilder(&config)?;
         self.prepare_ovmf_files()?;
         self.prepare_limine_files()?;
         self.copy_kernel(&bin_path)?;
         self.create_limine_iso(&config)?;
 
-        if config.filesystem.is_some() {
-            self.build_filesystem(&config)?;
-        }
-
         Ok(0)
     }
 
-    fn prepare_ovmf_files(&self) -> Result<(), BuildError> {
-        // println!("BUILD STEP 1/4: Preparing OVMF firmware files");
+    fn execute_prebuilder(&self, config: &Config) -> Result<(), BuildError> {
+        std::process::Command::new("sh")
+            .arg("-c")
+            .arg(config.prebuilder.as_ref().unwrap_or(&"None".to_string()))
+            .stdout(Stdio::piped())
+            .output()
+            .map_err(|_| BuildError::CargoBuildFailed)?;
+        Ok(())
+    }
 
+    fn prepare_ovmf_files(&self) -> Result<(), BuildError> {
         std::fs::create_dir_all("./target/ovmf").unwrap();
         
         self.prepare_ovmf_file(
@@ -88,8 +93,6 @@ impl Builder {
     }
 
     fn prepare_limine_files(&self) -> Result<(), BuildError> {
-        // println!("BUILD STEP 2/4: Preparing Limine bootloader files");
-
         std::fs::create_dir_all("./target").unwrap();
         
         self.clone_limine_binary()?;
@@ -140,8 +143,6 @@ impl Builder {
     }
 
     fn copy_kernel(&mut self, bin_path: &Option<PathBuf>) -> Result<(), BuildError> {
-        // println!("BUILD STEP 3/4: Copying kernel binary to the ISO directory");
-
         std::fs::create_dir_all("target/iso_root/boot/kernel")
             .map_err(|_| BuildError::CreateDirectoryFailed)?;
 
@@ -160,8 +161,6 @@ impl Builder {
     }
 
     fn create_limine_iso(&self, config: &Config) -> Result<(), BuildError> {
-        // println!("BUILD STEP 4/4: Creating the Limine ISO");
-
         if let Some(parent) = Path::new(&config.image_path).parent() {
             std::fs::create_dir_all(parent)
                 .map_err(|_| BuildError::CreateDirectoryFailed)?;
@@ -195,101 +194,6 @@ impl Builder {
             .stdout(Stdio::piped())
             .output()
             .map_err(|_| BuildError::InstallLimineToIsoFailed)?;
-        Ok(())
-    }
-
-    fn build_filesystem(&self, config: &Config) -> Result<(), BuildError> {
-        // println!("BUILD STEP 5/5: Building the filesystem image");
-
-        if config.filesystem_builder.is_some() {
-            println!("Running filesystem builder: {}", config.filesystem_builder.as_ref().unwrap());
-            let builder = config.filesystem_builder.as_ref().unwrap();
-            let mut command = std::process::Command::new(builder);
-            command.stdout(Stdio::piped());
-            command.output().map_err(|_| BuildError::CreateDirectoryFailed)?;
-        }
-
-        std::process::Command::new("dd")
-            .arg("if=/dev/zero")
-            .arg(format!("of={}", config.filesystem_image.clone()))
-            .arg("bs=1M")
-            .arg(format!("count={}", config.filesystem_size.clone()))
-            .stdout(Stdio::piped())
-            .output()
-            .map_err(|_| BuildError::CreateEmptyImgFailed)?;
-
-        let filesystem = config.filesystem.clone().unwrap().to_uppercase();
-        if filesystem.starts_with("FAT") {
-            self.build_filesystem_fat(&config)?;
-        } else if filesystem == "EXT4" {
-            self.build_filesystem_ext4(&config)?;
-        } else {
-            return Err(BuildError::FormatImgFailed);
-        }
-        
-        Ok(())
-    }
-
-    fn build_filesystem_fat(&self, config: &Config) -> Result<(), BuildError> {
-        let fat_type = match config.filesystem.clone().unwrap().to_uppercase().as_str() {
-            "FAT12" => "-F 12",
-            "FAT16" => "-F 16",
-            "FAT32" => "-F 32",
-            _ => "-F 32"
-        };
-
-        std::process::Command::new("mkfs.fat")
-            .arg(fat_type)
-            .arg(config.filesystem_image.clone())
-            .status()
-            .map_err(|_| BuildError::FormatImgFailed)
-            .unwrap_or(ExitStatus::default());
-
-        std::process::Command::new("mmd")
-            .arg("-i").arg(config.filesystem_image.clone())
-            .arg(format!("::{}", config.filesystem_target_dir.clone()))
-            .status()
-            .map_err(|_| BuildError::AddImgDirectoryFailed)?;
-
-        std::process::Command::new("mcopy")
-            .arg("-i").arg(config.filesystem_image.clone())
-            .arg(format!("{}/*", config.filesystem_source_dir.clone()))
-            .arg(format!("::{}/", config.filesystem_target_dir.clone()))
-            .status()
-            .map_err(|_| BuildError::AddImgContentFailed)?;
-
-        Ok(())
-    }
-
-    fn build_filesystem_ext4(&self, config: &Config) -> Result<(), BuildError> {
-        std::process::Command::new("mkfs.ext4")
-            .arg(config.filesystem_image.clone())
-            .status()
-            .map_err(|_| BuildError::FormatImgFailed)
-            .unwrap_or(ExitStatus::default());
-
-        std::process::Command::new("mount")
-            .arg("-o").arg("loop")
-            .arg(config.filesystem_image.clone())
-            .arg("/mnt")
-            .status()
-            .map_err(|_| BuildError::FormatImgFailed)
-            .unwrap_or(ExitStatus::default());
-
-        std::process::Command::new("cp")
-            .arg("-r")
-            .arg(format!("{}/", config.filesystem_source_dir.clone()))
-            .arg("/mnt/")
-            .status()
-            .map_err(|_| BuildError::AddImgContentFailed)
-            .unwrap_or(ExitStatus::default());
-
-        std::process::Command::new("umount")
-            .arg("/mnt")
-            .status()
-            .map_err(|_| BuildError::FormatImgFailed)
-            .unwrap_or(ExitStatus::default());
-        
         Ok(())
     }
 }
