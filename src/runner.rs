@@ -14,14 +14,8 @@ pub fn run(config: Config, is_test: bool) -> Result<i32, RunError> {
         .collect();
 
     if config.filesystem.is_some() {
-        run_command.push("-device".to_owned());
-        run_command.push("ahci,id=ahci".to_owned());
-
         run_command.push("-drive".to_owned());
-        run_command.push(format!("if=none,file={},format=raw,id=disk0", config.filesystem.unwrap().clone()));
-
-        run_command.push("-device".to_owned());
-        run_command.push("ide-hd,bus=ahci.0,drive=disk0".to_owned());
+        run_command.push(format!("file={},format=raw,cache=writeback", config.filesystem.unwrap().clone()));
     }
 
     if is_test {
