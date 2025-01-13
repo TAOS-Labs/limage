@@ -132,7 +132,6 @@ impl Into<Config> for ConfigBuilder {
             run_command: self.run_command.unwrap_or_else(|| {
                 vec![
                     "qemu-system-x86_64".into(),
-                    "-M".into(), "q35".into(),      // Q35 chipset
                     "-m".into(), "2G".into(),       // 2GB RAM
                     "-cdrom".into(), "{}".into(),   // {} will be replaced with image path
                     "-drive".into(), "if=pflash,unit=0,format=raw,file=target/ovmf/ovmf-code-x86_64.fd,readonly=on".into(),
