@@ -83,6 +83,12 @@ impl Builder {
                 .stdout(Stdio::piped())
                 .output()
                 .map_err(|e| BuildError::CloneLimineFailed { source: e })?;
+
+            Command::new("make")
+                .arg("-C")
+                .arg(&self.config.build.limine_path)
+                .status()
+                .map_err(|e| BuildError::CloneLimineFailed { source: (e) })?;
         }
         Ok(())
     }
@@ -186,7 +192,7 @@ impl Builder {
     }
 
     fn install_limine_to_iso(&self) -> Result<(), BuildError> {
-        let limine_binary = self.config.build.limine_path.join("limine.exe");
+        let limine_binary = self.config.build.limine_path.join("limine");
         Command::new(limine_binary)
             .args(&[
                 "bios-install",
