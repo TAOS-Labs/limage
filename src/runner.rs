@@ -1,4 +1,4 @@
-use crate::config::LimageConfig;
+use crate::config::{ConfigError, LimageConfig};
 use std::{process::Command, time::Duration};
 use thiserror::Error;
 use wait_timeout::ChildExt;
@@ -13,11 +13,12 @@ impl Runner {
         Self { config, is_test }
     }
 
-    pub fn run(&self) -> Result<i32, RunError> {
-        let cmd_args = self.config.get_qemu_command(&self.config.build.image_path, self.is_test);
+    pub fn run(&self, mode: Option<&str>) -> Result<i32, RunError> {
+        let cmd_args =
+            self.config
+                .get_qemu_command(&self.config.build.image_path, self.is_test, mode)?;
         let mut command = Command::new(&cmd_args[0]);
         command.args(&cmd_args[1..]);
-        println!("{:#?}", cmd_args);
 
         if self.is_test {
             self.handle_test_execution(&mut command)
@@ -46,12 +47,8 @@ impl Runner {
         {
             None => {
                 // Timeout occurred
-                child
-                    .kill()
-                    .map_err(|e| RunError::KillQemu { source: e })?;
-                child
-                    .wait()
-                    .map_err(|e| RunError::WaitQemu { source: e })?;
+                child.kill().map_err(|e| RunError::KillQemu { source: e })?;
+                child.wait().map_err(|e| RunError::WaitQemu { source: e })?;
                 Ok(2) // Timeout exit code
             }
             Some(status) => {
@@ -68,6 +65,9 @@ impl Runner {
 
 #[derive(Debug, Error)]
 pub enum RunError {
+    #[error("Configuration error: {source}")]
+    Config { source: ConfigError },
+
     #[error("Failed to start QEMU: {source}\nMake sure QEMU is installed and available in PATH")]
     StartQemu { source: std::io::Error },
 
@@ -79,4 +79,10 @@ pub enum RunError {
 
     #[error("Failed to wait for QEMU process: {source}")]
     WaitQemu { source: std::io::Error },
+}
+
+impl From<ConfigError> for RunError {
+    fn from(error: ConfigError) -> Self {
+        RunError::Config { source: error }
+    }
 }

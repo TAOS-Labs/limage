@@ -3,7 +3,7 @@ use std::{path::Path, process};
 
 use limage::{
     builder::Builder,
-    cli::{Cli, Commands},
+    cli::{Cli, Commands, RunMode},
     config::LimageConfig,
     runner::Runner,
 };
@@ -38,15 +38,20 @@ fn run() -> anyhow::Result<()> {
             builder.build(None)?;
             Ok(())
         }
-        Commands::Run { kernel } => {
+        Commands::Run { kernel, mode } => {
             let kernel_path = kernel.as_deref();
             let is_test = kernel_path.map(is_test_executable).unwrap_or(false);
 
             let builder = Builder::new(config.clone())?;
             builder.build(kernel_path)?;
 
+            let mode_name = match mode {
+                Some(RunMode::Mode { name }) => Some(name.as_str().to_owned()),
+                None => None,
+            };
+
             let runner = Runner::new(config, is_test);
-            let exit_code = runner.run()?;
+            let exit_code = runner.run(mode_name.as_deref())?;
             process::exit(exit_code);
         }
         Commands::Clean => {

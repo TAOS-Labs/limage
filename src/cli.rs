@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "limage")]
@@ -17,7 +17,15 @@ pub enum Commands {
     Run {
         #[arg(value_name = "KERNEL")]
         kernel: Option<PathBuf>,
+
+        #[command(subcommand)]
+        mode: Option<RunMode>,
     },
 
     Clean,
+}
+
+#[derive(Subcommand)]
+pub enum RunMode {
+    Mode { name: String },
 }

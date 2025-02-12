@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -10,6 +11,8 @@ pub struct LimageConfig {
     pub qemu: QemuConfig,
     #[serde(default = "default_test_config")]
     pub test: TestConfig,
+    #[serde(default)]
+    pub modes: HashMap<String, ModeConfig>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -48,6 +51,12 @@ pub struct TestConfig {
     pub no_reboot: bool,
     #[serde(default)]
     pub extra_args: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ModeConfig {
+    #[serde(default)]
+    pub args: Vec<String>,
 }
 
 fn default_build_config() -> BuildConfig {
@@ -126,7 +135,7 @@ fn default_test_no_reboot() -> bool {
 impl LimageConfig {
     pub fn load() -> Result<Self, ConfigError> {
         let config_path = Path::new("limage_config.toml");
-        
+
         if config_path.exists() {
             Self::from_file(config_path)
         } else {
@@ -135,34 +144,42 @@ impl LimageConfig {
     }
 
     pub fn from_file(path: &Path) -> Result<Self, ConfigError> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| ConfigError::ReadConfig { source: e })?;
-        
-        toml::from_str(&content)
-            .map_err(|e| ConfigError::ParseConfig { source: e })
+        let content =
+            std::fs::read_to_string(path).map_err(|e| ConfigError::ReadConfig { source: e })?;
+
+        toml::from_str(&content).map_err(|e| ConfigError::ParseConfig { source: e })
     }
 
-    pub fn get_qemu_command(&self, image_path: &Path, is_test: bool) -> Vec<String> {
+    pub fn get_mode_args(&self, mode: &str) -> Result<Vec<String>, ConfigError> {
+        self.modes
+            .get(mode)
+            .map(|m| m.args.clone())
+            .ok_or_else(|| ConfigError::ModeNotFound {
+                mode: mode.to_string(),
+            })
+    }
+
+    pub fn get_qemu_command(
+        &self,
+        image_path: &Path,
+        is_test: bool,
+        mode: Option<&str>,
+    ) -> Result<Vec<String>, ConfigError> {
         let mut cmd = vec![self.qemu.binary.clone()];
-        
-        // Add base arguments with replacements
+
         for arg in &self.qemu.base_args {
             cmd.push(
                 arg.replace("{image}", &image_path.display().to_string())
-                   .replace("{ovmf}", &self.build.ovmf_path.display().to_string())
+                    .replace("{ovmf}", &self.build.ovmf_path.display().to_string()),
             );
         }
 
-        // Add extra QEMU args
-        cmd.extend(self.qemu.extra_args.clone());
+        if let Some(mode_name) = mode {
+            let mode_args = self.get_mode_args(mode_name)?;
+            cmd.extend(mode_args);
+        }
 
-        // Add filesystem if configured
-        /*if let Some(fs) = &self.build.filesystem {
-            cmd.extend(vec![
-                "-drive".to_string(),
-                format!("file={},format=raw,cache=writeback", fs),
-            ]);
-        }*/
+        cmd.extend(self.qemu.extra_args.clone());
 
         // Add test-specific args
         if is_test {
@@ -172,7 +189,7 @@ impl LimageConfig {
             cmd.extend(self.test.extra_args.clone());
         }
 
-        cmd
+        Ok(cmd)
     }
 
     pub fn validate(&self) -> Result<(), ConfigError> {
@@ -203,6 +220,7 @@ impl Default for LimageConfig {
             build: default_build_config(),
             qemu: default_qemu_config(),
             test: default_test_config(),
+            modes: HashMap::new(),
         }
     }
 }
@@ -221,4 +239,7 @@ pub enum ConfigError {
         name: String,
         source: std::io::Error,
     },
+
+    #[error("Mode '{mode}' not found in configuration file")]
+    ModeNotFound { mode: String },
 }
