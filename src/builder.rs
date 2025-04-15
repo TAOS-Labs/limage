@@ -98,11 +98,41 @@ impl Builder {
 
     #[instrument(skip(self), err)]
     fn clone_limine_binary(&self) -> Result<(), BuildError> {
-        if !self.config.build.limine_path.exists() {
-            info!(
-                "Cloning Limine repository to {:?}",
-                self.config.build.limine_path
-            );
+        let required_files = [
+            "limine-bios.sys",
+            "limine-bios-cd.bin",
+            "limine-uefi-cd.bin",
+            "BOOTX64.EFI",
+            "BOOTIA32.EFI",
+        ];
+
+        let should_clone = !self.config.build.limine_path.exists()
+            || required_files.iter().any(|file| {
+                let file_path = self.config.build.limine_path.join(file);
+                !file_path.exists()
+            });
+
+        if should_clone {
+            // If directory exists but is incomplete, remove it first
+            if self.config.build.limine_path.exists() {
+                info!(
+                    "Limine directory exists but missing required files, removing and re-cloning"
+                );
+                std::fs::remove_dir_all(&self.config.build.limine_path).map_err(|e| {
+                    BuildError::CloneLimineFailed {
+                        source: std::io::Error::new(
+                            e.kind(),
+                            format!("Failed to remove incomplete Limine directory: {}", e),
+                        ),
+                    }
+                })?;
+            } else {
+                info!(
+                    "Cloning Limine repository to {:?}",
+                    self.config.build.limine_path
+                );
+            }
+
             std::fs::create_dir_all(&self.config.build.limine_path)?; // Create first
             let clone_result = Command::new("git")
                 .args(&[
@@ -135,7 +165,7 @@ impl Builder {
 
             info!("Limine repository cloned and built successfully");
         } else {
-            debug!("Limine repository already exists, skipping clone");
+            debug!("Limine repository exists with all required files, skipping clone");
         }
         Ok(())
     }
